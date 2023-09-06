@@ -101,6 +101,7 @@ func (s *Server) ListenAndServe(network, addr string) error {
 
 // Serve is used to serve connections from a listener
 func (s *Server) Serve(l net.Listener) error {
+	// TODO: implement context
 	for {
 		conn, err := l.Accept()
 		if err != nil {
