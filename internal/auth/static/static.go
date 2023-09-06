@@ -1,12 +1,21 @@
 package static
 
-// Credentials enables using a map directly as a credential store
-type Credentials map[string]string
+type Static struct {
+	StaticUser string
+	StaticPass string
+}
 
-func (s Credentials) Valid(user, password string) bool {
-	pass, ok := s[user]
-	if !ok {
+func NewStatic(user string, pass string) *Static {
+	return &Static{
+		StaticUser: user,
+		StaticPass: pass,
+	}
+}
+
+func (s Static) Valid(user string, pass string) bool {
+	if s.StaticUser == user && s.StaticPass == pass {
+		return true
+	} else {
 		return false
 	}
-	return password == pass
 }

@@ -19,32 +19,32 @@ type Config struct {
 	// By default, "auth-less" mode is enabled.
 	// For password-based auth use UserPassAuthenticator.
 	AuthMethods []Authenticator
-
+	
 	// If provided, username/password authentication is enabled,
 	// by appending a UserPassAuthenticator to AuthMethods. If not provided,
 	// and AUthMethods is nil, then "auth-less" mode is enabled.
 	Credentials CredentialStore
-
+	
 	// Resolver can be provided to do custom name resolution.
 	// Defaults to DNSResolver if not provided.
 	Resolver NameResolver
-
+	
 	// Rules is provided to enable custom logic around permitting
 	// various commands. If not provided, PermitAll is used.
 	Rules RuleSet
-
+	
 	// Rewriter can be used to transparently rewrite addresses.
 	// This is invoked before the RuleSet is invoked.
 	// Defaults to NoRewrite.
 	Rewriter AddressRewriter
-
+	
 	// BindIP is used for bind or udp associate
 	BindIP net.IP
-
+	
 	// Logger can be used to provide a custom log target.
 	// Defaults to stdout.
 	Logger *logger.Logger
-
+	
 	// Optional function for dialing out
 	Dial func(ctx context.Context, network, addr string) (net.Conn, error)
 }
@@ -66,27 +66,27 @@ func New(conf *Config) (*Server, error) {
 			conf.AuthMethods = []Authenticator{&NoAuthAuthenticator{}}
 		}
 	}
-
+	
 	// Ensure we have a DNS resolver
 	if conf.Resolver == nil {
 		conf.Resolver = DNSResolver{}
 	}
-
+	
 	// Ensure we have a rule set
 	if conf.Rules == nil {
 		conf.Rules = PermitAll()
 	}
-
+	
 	server := &Server{
 		config: conf,
 	}
-
+	
 	server.authMethods = make(map[uint8]Authenticator)
-
+	
 	for _, a := range conf.AuthMethods {
 		server.authMethods[a.GetCode()] = a
 	}
-
+	
 	return server, nil
 }
 
@@ -115,24 +115,24 @@ func (s *Server) Serve(l net.Listener) error {
 func (s *Server) ServeConn(conn net.Conn) error {
 	defer func() { _ = conn.Close() }()
 	bufConn := bufio.NewReader(conn)
-
+	
 	// Read the version byte
 	version := []byte{0}
 	if _, err := bufConn.Read(version); err != nil {
 		return fmt.Errorf("failed to get version byte: %v", err)
 	}
-
+	
 	// Ensure we are compatible
 	if version[0] != socks5Version {
 		return fmt.Errorf("unsupported socks version: %v", version)
 	}
-
+	
 	// Authenticate the connection
 	authContext, err := s.authenticate(conn, bufConn)
 	if err != nil {
 		return fmt.Errorf("failed to authenticate: %v", err)
 	}
-
+	
 	request, err := NewRequest(bufConn)
 	if err != nil {
 		if errors.Is(err, unrecognizedAddrType) {
@@ -146,12 +146,12 @@ func (s *Server) ServeConn(conn net.Conn) error {
 	if client, ok := conn.RemoteAddr().(*net.TCPAddr); ok {
 		request.RemoteAddr = &AddrSpec{IP: client.IP, Port: client.Port}
 	}
-	s.config.Logger.Lg.Info().Msgf("%s -> %s", request.RemoteAddr, request.DestAddr)
-
+	s.config.Logger.Lg.Debug().Msgf("%s -> %s", request.RemoteAddr, request.DestAddr)
+	
 	// Process the client request
 	if err := s.handleRequest(request, conn); err != nil {
 		return fmt.Errorf("failed to handle request: %v", err)
 	}
-
+	
 	return nil
 }

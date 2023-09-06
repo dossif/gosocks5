@@ -5,13 +5,9 @@ import (
 	"testing"
 )
 
-func TestStaticCredentials(t *testing.T) {
-	cred := StaticCredentials{
-		"user1": "pass1",
-		"user2": "",
-	}
-	assert.True(t, cred.Valid("user1", "pass1"))
-	assert.True(t, cred.Valid("user2", ""))
-	assert.False(t, cred.Valid("user1", ""))
-	assert.False(t, cred.Valid("", "pass1"))
+func TestCredentials(t *testing.T) {
+	scs1 := NewStatic("user1", "pass1")
+	assert.True(t, scs1.Valid("user1", "pass1"))
+	assert.False(t, scs1.Valid("user1", "xxx"))
+	assert.False(t, scs1.Valid("xxx", "pass1"))
 }

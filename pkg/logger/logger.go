@@ -7,6 +7,10 @@ import (
 	"time"
 )
 
+type LoggerInterface interface {
+	AddField(fields map[string]string)
+}
+
 type Logger struct {
 	Lg *zerolog.Logger
 }
@@ -14,16 +18,17 @@ type Logger struct {
 func NewLogger(level string) (*Logger, error) {
 	lvl, err := zerolog.ParseLevel(level)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse log level %v: %w", level, err)
+		return &Logger{}, fmt.Errorf("failed to parse log level %v: %v", level, err)
 	}
-	logOut := zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339}
-	var newLg zerolog.Logger
-	if lvl == zerolog.DebugLevel {
-		newLg = zerolog.New(logOut).Level(zerolog.DebugLevel).With().Timestamp().Logger()
-	} else {
-		newLg = zerolog.New(logOut).Level(zerolog.InfoLevel).With().Timestamp().Logger()
+	cwr := zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339}
+	lg := zerolog.New(cwr).Level(lvl).With().Timestamp().Logger()
+	return &Logger{Lg: &lg}, nil
+}
+
+func (l *Logger) AddField(fields map[string]string) {
+	nl := *l.Lg
+	for k, v := range fields {
+		nl = l.Lg.With().Str(k, v).Logger()
+		l.Lg = &nl
 	}
-	lg := Logger{}
-	lg.Lg = &newLg
-	return &lg, nil
 }
