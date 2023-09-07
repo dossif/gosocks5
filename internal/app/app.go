@@ -9,6 +9,8 @@ import (
 	"sync"
 )
 
+const network = "tcp"
+
 func Run(ctx context.Context, wg *sync.WaitGroup, cfg *config.Config, log *logger.Logger, appName string, appVersion string) {
 
 	// Create a SOCKS5 server
@@ -17,8 +19,8 @@ func Run(ctx context.Context, wg *sync.WaitGroup, cfg *config.Config, log *logge
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("server listen %s://%s\n", cfg.Proto, cfg.Listen)
-	if err := server.ListenAndServe(cfg.Proto, cfg.Listen); err != nil {
+	fmt.Printf("server listen %s://%s\n", cfg.Listen)
+	if err := server.ListenAndServe(network, cfg.Listen); err != nil {
 		panic(err)
 	}
 }

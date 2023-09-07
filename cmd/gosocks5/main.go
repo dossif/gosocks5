@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"github.com/dossif/gosocks5/internal/app"
 	"github.com/dossif/gosocks5/internal/config"
 	"github.com/dossif/gosocks5/pkg/logger"
@@ -20,6 +21,11 @@ const (
 var appVersion = "0.0.0"
 
 func main() {
+	var help = flag.Bool("h", false, "print usage and exit")
+	flag.Parse()
+	if *help == true {
+		config.PrintUsage(configPrefix)
+	}
 	wg := new(sync.WaitGroup)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
