@@ -3,6 +3,7 @@ module github.com/dossif/gosocks5
 go 1.19
 
 require (
+	github.com/carlmjohnson/versioninfo v0.22.5
 	github.com/go-ldap/ldap v3.0.3+incompatible
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/rs/zerolog v1.30.0

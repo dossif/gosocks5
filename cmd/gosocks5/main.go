@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
+	"github.com/carlmjohnson/versioninfo"
 	"github.com/dossif/gosocks5/internal/app"
 	"github.com/dossif/gosocks5/internal/config"
 	"github.com/dossif/gosocks5/pkg/logger"
@@ -21,6 +23,13 @@ const (
 var appVersion = "0.0.0"
 
 func main() {
+
+	fmt.Println("ShortInfo:", versioninfo.Short())
+	fmt.Println("Version:", versioninfo.Version)
+	fmt.Println("Revision:", versioninfo.Revision)
+	fmt.Println("DirtyBuild:", versioninfo.DirtyBuild)
+	fmt.Println("LastCommit:", versioninfo.LastCommit)
+
 	var help = flag.Bool("h", false, "print usage and exit")
 	flag.Parse()
 	if *help == true {
