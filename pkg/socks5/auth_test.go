@@ -2,6 +2,7 @@ package socks5
 
 import (
 	"bytes"
+	"golang.org/x/net/context"
 	"testing"
 )
 
@@ -10,7 +11,7 @@ func TestNoAuth(t *testing.T) {
 	req.Write([]byte{1, NoAuth})
 	var resp bytes.Buffer
 
-	s, _ := New(&Config{})
+	s, _ := New(context.Background(), &Config{})
 	ctx, err := s.authenticate(&resp, req)
 	if err != nil {
 		t.Fatalf("err: %v", err)
@@ -48,7 +49,7 @@ func TestPasswordAuth_Valid(t *testing.T) {
 
 	cator := UserPassAuthenticator{Credentials: cred}
 
-	s, _ := New(&Config{AuthMethods: []Authenticator{cator}})
+	s, _ := New(context.Background(), &Config{AuthMethods: []Authenticator{cator}})
 
 	ctx, err := s.authenticate(&resp, req)
 	if err != nil {
@@ -84,7 +85,7 @@ func TestPasswordAuth_Invalid(t *testing.T) {
 		"foo": "bar",
 	}
 	cator := UserPassAuthenticator{Credentials: cred}
-	s, _ := New(&Config{AuthMethods: []Authenticator{cator}})
+	s, _ := New(context.Background(), &Config{AuthMethods: []Authenticator{cator}})
 
 	ctx, err := s.authenticate(&resp, req)
 	if err != UserAuthFailed {
@@ -111,7 +112,7 @@ func TestNoSupportedAuth(t *testing.T) {
 	}
 	cator := UserPassAuthenticator{Credentials: cred}
 
-	s, _ := New(&Config{AuthMethods: []Authenticator{cator}})
+	s, _ := New(context.Background(), &Config{AuthMethods: []Authenticator{cator}})
 
 	ctx, err := s.authenticate(&resp, req)
 	if err != NoSupportedAuth {

@@ -1,16 +1,23 @@
 package config
 
 import (
+	"fmt"
 	"github.com/kelseyhightower/envconfig"
 	"os"
 )
 
+type AuthMethod string
+
 type Config struct {
-	Listen     string `default:"0.0.0.0:1080" desc:"socks5 server listen ip:port"`
-	LogLevel   string `default:"info" desc:"log level: debug|info|warn|error|fatal"`
-	AuthMethod string `default:"none" desc:"auth method: none|static|ldap"`
-	AuthStatic Static
-	AuthLdap   Ldap
+	Listen   string `default:"127.0.0.1:1080" desc:"socks5 server listen ip:port"`
+	LogLevel string `default:"info" desc:"log level: debug|info|warn|error|fatal"`
+	Auth     Auth
+}
+
+type Auth struct {
+	Method AuthMethod `default:"none" desc:"auth method: none|static|ldap"`
+	Static Static
+	Ldap   Ldap
 }
 
 type Static struct {
@@ -43,4 +50,17 @@ func PrintUsage(prefix string) {
 	var cfg Config
 	_ = envconfig.Usage(prefix, &cfg)
 	os.Exit(128)
+}
+
+func (a *AuthMethod) Decode(value string) error {
+	if value != "none" && value != "static" && value != "ldap" {
+		return fmt.Errorf("unsupported auth method %v", value)
+	} else {
+		*a = AuthMethod(value)
+	}
+	return nil
+}
+
+func (a *AuthMethod) String() string {
+	return string(*a)
 }

@@ -2,6 +2,7 @@ package socks5
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"github.com/dossif/gosocks5/pkg/logger"
 	"io"
@@ -45,7 +46,7 @@ func TestSOCKS5_Connect(t *testing.T) {
 		AuthMethods: []Authenticator{cator},
 		Logger:      lg,
 	}
-	serv, err := New(conf)
+	serv, err := New(context.Background(), conf)
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}

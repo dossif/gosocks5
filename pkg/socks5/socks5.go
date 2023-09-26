@@ -121,7 +121,12 @@ func (s *Server) Serve(l net.Listener) error {
 				return fmt.Errorf("failed to accept connection: %v", err)
 			}
 		}
-		go func() { _ = s.ServeConn(conn) }()
+		go func() {
+			err := s.ServeConn(conn)
+			if err != nil {
+				s.config.Logger.Lg.Warn().Msgf("failed to serve connection: %v", err)
+			}
+		}()
 	}
 }
 

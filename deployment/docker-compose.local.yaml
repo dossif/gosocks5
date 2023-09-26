@@ -1,0 +1,11 @@
+version: "3"
+services:
+  gosocks5:
+    container_name: gosocks5
+    image: gosocks5
+    build: ./build
+    environment:
+      GOSOCKS5_LISTEN: 0.0.0.0:1080
+    ports:
+      - "0.0.0.0:1080:1080"
+    restart: unless-stopped
