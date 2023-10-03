@@ -16,7 +16,7 @@ const (
 )
 
 type Ldap struct {
-	Client   ldap.Client
+	Url      string
 	BindUser string
 	BindPass string
 	BaseDn   string
@@ -29,12 +29,8 @@ func NewLdap(log logger.Logger, url, bindUser, bindPass, baseDn, filter string) 
 	cache := ttlcache.New[string, string](
 		ttlcache.WithTTL[string, string](ttlcache.DefaultTTL), ttlcache.WithDisableTouchOnHit[string, string](),
 	)
-	cl, err := ldap.DialURL(url)
-	if err != nil {
-		return &Ldap{}, fmt.Errorf("failed to connect to ldap server %v: %v", url, err)
-	}
 	return &Ldap{
-		Client:   cl,
+		Url:      url,
 		BindUser: bindUser,
 		BindPass: bindPass,
 		BaseDn:   baseDn,
@@ -82,14 +78,19 @@ func (l *Ldap) checkCache(user string, pass string) int {
 }
 
 func (l *Ldap) checkLdap(user string, pass string) bool {
-	filter := fmt.Sprintf(l.Filter, ldap.EscapeFilter(user))
-	searchReq := ldap.NewSearchRequest(l.BaseDn, ldap.ScopeWholeSubtree, 0, 0, 0, false, filter, []string{}, []ldap.Control{})
-	err := l.Client.Bind(l.BindUser, l.BindPass)
+	client, err := ldap.DialURL(l.Url)
 	if err != nil {
-		l.Log.Lg.Warn().Msgf("failed to bind ldap with user %v: %v", l.BindUser, err)
+		l.Log.Lg.Error().Msgf("failed to connect to ldap server %v: %v", l.Url, err)
 		return false
 	}
-	result, err := l.Client.Search(searchReq)
+	err = client.Bind(l.BindUser, l.BindPass)
+	if err != nil {
+		l.Log.Lg.Error().Msgf("failed to bind ldap with user %v: %v", l.BindUser, err)
+		return false
+	}
+	filter := fmt.Sprintf(l.Filter, ldap.EscapeFilter(user))
+	searchReq := ldap.NewSearchRequest(l.BaseDn, ldap.ScopeWholeSubtree, 0, 0, 0, false, filter, []string{}, []ldap.Control{})
+	result, err := client.Search(searchReq)
 	if err != nil {
 		l.Log.Lg.Warn().Msgf("failed to search ldap user %v with filter %v: %v", user, filter, err)
 		return false
@@ -102,11 +103,12 @@ func (l *Ldap) checkLdap(user string, pass string) bool {
 	for _, res := range result.Entries {
 		userDn = res.DN
 	}
-	err = l.Client.Bind(userDn, pass)
+	err = client.Bind(userDn, pass)
 	if err != nil {
 		l.Log.Lg.Debug().Msgf("failed to auth ldap user %v: %v", userDn, err)
 		return false
 	}
+	defer client.Close()
 	return true
 }
 

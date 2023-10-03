@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"github.com/carlmjohnson/versioninfo"
 	"github.com/dossif/gosocks5/internal/app"
 	"github.com/dossif/gosocks5/internal/config"
@@ -12,6 +13,7 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+	"time"
 )
 
 const (
@@ -37,5 +39,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to create logger: %v", err)
 	}
-	app.Run(ctx, wg, cfg, lg, appName, versioninfo.Short())
+	version := fmt.Sprintf("%v (%v)", versioninfo.Short(), versioninfo.LastCommit.Format(time.RFC3339))
+	app.Run(ctx, wg, cfg, lg, appName, version)
 }
