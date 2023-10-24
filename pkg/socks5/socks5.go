@@ -7,6 +7,7 @@ import (
 	"github.com/dossif/gosocks5/pkg/logger"
 	"github.com/google/uuid"
 	"golang.org/x/net/context"
+	"io"
 	"net"
 	"time"
 )
@@ -161,13 +162,28 @@ func (s *Server) ServeConnection(conn Connection) error {
 	defer func() {
 		err := conn.conn.Close()
 		if err != nil {
-			conn.Lg.Lg.Error().Msgf("failed to close connection")
+			conn.Lg.Lg.Warn().Msgf("failed to close connection %v", err)
 		} else {
 			ConnCount = ConnCount - 1
 			conn.Lg.Lg.Trace().Msgf("closed connection")
 		}
 	}()
 	bufConn := bufio.NewReader(conn.conn)
+
+	go func() {
+		for {
+			_ = conn.conn.SetReadDeadline(time.Now().Add(time.Second * 2))
+			_, err := conn.conn.Read([]byte{})
+			if err == io.EOF {
+				fmt.Println("EOF EOF EOF")
+				_ = conn.conn.Close()
+				break
+			} else {
+				_ = conn.conn.SetReadDeadline(time.Time{})
+			}
+			time.Sleep(time.Second * 2)
+		}
+	}()
 
 	// Read the version byte
 	version := []byte{0}

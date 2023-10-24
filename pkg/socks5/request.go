@@ -4,12 +4,11 @@ import (
 	"fmt"
 	"github.com/dossif/gosocks5/pkg/logger"
 	"github.com/google/uuid"
+	"golang.org/x/net/context"
 	"io"
 	"net"
 	"strconv"
 	"strings"
-
-	"golang.org/x/net/context"
 )
 
 const (
