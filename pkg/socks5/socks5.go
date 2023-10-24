@@ -104,7 +104,7 @@ func New(ctx context.Context, lg *logger.Logger, conf *Config) (*Server, error) 
 
 // ListenAndServe is used to create a listener and serve on it
 func (s *Server) ListenAndServe(network, addr string) error {
-	var l net.ListenConfig
+	l := net.ListenConfig{KeepAlive: time.Second * 1}
 	ll, err := l.Listen(s.ctx, network, addr)
 	if err != nil {
 		return err
