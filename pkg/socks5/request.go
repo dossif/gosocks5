@@ -2,6 +2,8 @@ package socks5
 
 import (
 	"fmt"
+	"github.com/dossif/gosocks5/pkg/logger"
+	"github.com/google/uuid"
 	"io"
 	"net"
 	"strconv"
@@ -66,6 +68,8 @@ func (a *AddrSpec) Address() string {
 
 // A Request represents request received by a server
 type Request struct {
+	Id uuid.UUID
+	Lg *logger.Logger
 	// Protocol version
 	Version uint8
 	// Requested command
@@ -87,7 +91,7 @@ type conn interface {
 }
 
 // NewRequest creates a new Request from the tcp connection
-func NewRequest(bufConn io.Reader) (*Request, error) {
+func NewRequest(id uuid.UUID, lg *logger.Logger, bufConn io.Reader) (*Request, error) {
 	// Read the version byte
 	header := []byte{0, 0, 0}
 	if _, err := io.ReadAtLeast(bufConn, header, 3); err != nil {
@@ -106,6 +110,8 @@ func NewRequest(bufConn io.Reader) (*Request, error) {
 	}
 
 	request := &Request{
+		Id:       id,
+		Lg:       lg,
 		Version:  socks5Version,
 		Command:  header[1],
 		DestAddr: dest,
@@ -117,36 +123,33 @@ func NewRequest(bufConn io.Reader) (*Request, error) {
 
 // handleRequest is used for request processing after authentication
 func (s *Server) handleRequest(req *Request, conn conn) error {
-	ctx := context.Background()
-
 	// Resolve the address if we have a FQDN
 	dest := req.DestAddr
 	if dest.FQDN != "" {
-		ctx_, addr, err := s.config.Resolver.Resolve(ctx, dest.FQDN)
+		_, addr, err := s.config.Resolver.Resolve(s.ctx, dest.FQDN)
 		if err != nil {
 			if err := sendReply(conn, hostUnreachable, nil); err != nil {
 				return fmt.Errorf("failed to send reply: %v", err)
 			}
 			return fmt.Errorf("failed to resolve destination '%v': %v", dest.FQDN, err)
 		}
-		ctx = ctx_
 		dest.IP = addr
 	}
 
 	// Apply any address rewrites
 	req.realDestAddr = req.DestAddr
 	if s.config.Rewriter != nil {
-		ctx, req.realDestAddr = s.config.Rewriter.Rewrite(ctx, req)
+		_, req.realDestAddr = s.config.Rewriter.Rewrite(s.ctx, req)
 	}
 
 	// Switch on the command
 	switch req.Command {
 	case ConnectCommand:
-		return s.handleConnect(ctx, conn, req)
-	case BindCommand:
-		return s.handleBind(ctx, conn, req)
-	case AssociateCommand:
-		return s.handleAssociate(ctx, conn, req)
+		return s.handleConnect(s.ctx, conn, req)
+	case BindCommand: // unsupported now
+		return s.handleBind(s.ctx, conn, req)
+	case AssociateCommand: // unsupported now
+		return s.handleAssociate(s.ctx, conn, req)
 	default:
 		if err := sendReply(conn, commandNotSupported, nil); err != nil {
 			return fmt.Errorf("failed to send reply: %v", err)
@@ -158,13 +161,11 @@ func (s *Server) handleRequest(req *Request, conn conn) error {
 // handleConnect is used to handle a connect command
 func (s *Server) handleConnect(ctx context.Context, conn conn, req *Request) error {
 	// Check if this is allowed
-	if ctx_, ok := s.config.Rules.Allow(ctx, req); !ok {
+	if _, ok := s.config.Rules.Allow(context.Background(), req); !ok {
 		if err := sendReply(conn, ruleFailure, nil); err != nil {
 			return fmt.Errorf("failed to send reply: %v", err)
 		}
 		return fmt.Errorf("connect to %v blocked by rules", req.DestAddr)
-	} else {
-		ctx = ctx_
 	}
 
 	// Attempt to connect
@@ -188,7 +189,14 @@ func (s *Server) handleConnect(ctx context.Context, conn conn, req *Request) err
 		}
 		return fmt.Errorf("connect to %v failed: %v", req.DestAddr, err)
 	}
-	defer func() { _ = target.Close() }()
+	defer func() {
+		err = target.Close()
+		if err != nil {
+			req.Lg.Lg.Warn().Msgf("failed to close target %v: %v", req.realDestAddr.Address(), err)
+		} else {
+			req.Lg.Lg.Trace().Msgf("closed target %v", req.realDestAddr.Address())
+		}
+	}()
 
 	// Send success
 	local := target.LocalAddr().(*net.TCPAddr)
@@ -199,8 +207,8 @@ func (s *Server) handleConnect(ctx context.Context, conn conn, req *Request) err
 
 	// Start proxying
 	errCh := make(chan error, 2)
-	go proxy(target, req.bufConn, errCh)
-	go proxy(conn, target, errCh)
+	go proxy(req.Lg, target, req.bufConn, errCh)
+	go proxy(req.Lg, conn, target, errCh)
 
 	// Wait
 	for i := 0; i < 2; i++ {
@@ -354,10 +362,15 @@ type closeWriter interface {
 }
 
 // proxy is used to send data from src to destination, and sends errors down a dedicated channel
-func proxy(dst io.Writer, src io.Reader, errCh chan error) {
+func proxy(lg *logger.Logger, dst io.Writer, src io.Reader, errCh chan error) {
 	_, err := io.Copy(dst, src)
 	if tcpConn, ok := dst.(closeWriter); ok {
-		_ = tcpConn.CloseWrite()
+		err = tcpConn.CloseWrite()
+		if err != nil {
+			lg.Lg.Warn().Msgf("failed to close proxy: %v", err)
+		} else {
+			lg.Lg.Trace().Msgf("closed proxy")
+		}
 	}
 	errCh <- err
 }

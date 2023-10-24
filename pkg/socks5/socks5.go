@@ -5,13 +5,17 @@ import (
 	"errors"
 	"fmt"
 	"github.com/dossif/gosocks5/pkg/logger"
+	"github.com/google/uuid"
 	"golang.org/x/net/context"
 	"net"
+	"time"
 )
 
 const (
 	socks5Version = uint8(5)
 )
+
+var ConnCount int
 
 // Config is used to set up and configure a Server
 type Config struct {
@@ -41,10 +45,6 @@ type Config struct {
 	// BindIP is used for bind or udp associate
 	BindIP net.IP
 
-	// Logger can be used to provide a custom log target.
-	// Defaults to stdout.
-	Logger *logger.Logger
-
 	// Optional function for dialing out
 	Dial func(ctx context.Context, network, addr string) (net.Conn, error)
 }
@@ -52,13 +52,21 @@ type Config struct {
 // Server is responsible for accepting connections and handling
 // the details of the SOCKS5 protocol
 type Server struct {
+	id          uuid.UUID
 	ctx         context.Context
+	Lg          *logger.Logger
 	config      *Config
 	authMethods map[uint8]Authenticator
 }
 
+type Connection struct {
+	id   uuid.UUID
+	Lg   *logger.Logger
+	conn net.Conn
+}
+
 // New creates a new Server and potentially returns an error
-func New(ctx context.Context, conf *Config) (*Server, error) {
+func New(ctx context.Context, lg *logger.Logger, conf *Config) (*Server, error) {
 	// Ensure we have at least one authentication method enabled
 	if len(conf.AuthMethods) == 0 {
 		if conf.Credentials != nil {
@@ -79,8 +87,10 @@ func New(ctx context.Context, conf *Config) (*Server, error) {
 	}
 
 	server := &Server{
+		id:     uuid.New(),
 		config: conf,
 		ctx:    ctx,
+		Lg:     lg,
 	}
 
 	server.authMethods = make(map[uint8]Authenticator)
@@ -99,41 +109,65 @@ func (s *Server) ListenAndServe(network, addr string) error {
 	if err != nil {
 		return err
 	} else {
-		s.config.Logger.Lg.Info().Msgf("start new %v listener on %v", network, addr)
+		s.Lg.Lg.Info().Msgf("start new %v listener on %v", network, addr)
 	}
-	return s.Serve(ll)
+	go func() {
+		for {
+			s.Lg.Lg.Trace().Msgf("connection count: %v", ConnCount)
+			time.Sleep(time.Second * 3)
+		}
+	}()
+	return s.ServeListener(ll)
 }
 
-// Serve is used to serve connections from a listener
-func (s *Server) Serve(l net.Listener) error {
+// ServeListener is used to serve connections from a listener
+func (s *Server) ServeListener(l net.Listener) error {
 	go func() {
 		<-s.ctx.Done()
 		_ = l.Close()
+		s.Lg.Lg.Trace().Msgf("close listener")
 	}()
 	for {
-		conn, err := l.Accept()
+		conn, err := l.Accept() // blocking
 		if err != nil {
 			select {
 			case <-s.ctx.Done():
-				s.config.Logger.Lg.Info().Msgf("close listener")
+				s.Lg.Lg.Info().Msgf("close listener")
 				return nil
 			default:
 				return fmt.Errorf("failed to accept connection: %v", err)
 			}
 		}
+		connId := uuid.New()
+		l := *s.Lg
+		l.AddField(map[string]string{"connId": connId.String()})
 		go func() {
-			err := s.ServeConn(conn)
+			err := s.ServeConnection(Connection{
+				id:   connId,
+				Lg:   &l,
+				conn: conn,
+			})
 			if err != nil {
-				s.config.Logger.Lg.Warn().Msgf("failed to serve connection: %v", err)
+				s.Lg.Lg.Warn().Msgf("failed to serve connection: %v", err)
 			}
 		}()
 	}
 }
 
-// ServeConn is used to serve a single connection.
-func (s *Server) ServeConn(conn net.Conn) error {
-	defer func() { _ = conn.Close() }()
-	bufConn := bufio.NewReader(conn)
+// ServeConnection is used to serve a single connection.
+func (s *Server) ServeConnection(conn Connection) error {
+	ConnCount = ConnCount + 1
+	conn.Lg.Lg.Trace().Msgf("start connection")
+	defer func() {
+		err := conn.conn.Close()
+		if err != nil {
+			conn.Lg.Lg.Error().Msgf("failed to close connection")
+		} else {
+			ConnCount = ConnCount - 1
+			conn.Lg.Lg.Trace().Msgf("closed connection")
+		}
+	}()
+	bufConn := bufio.NewReader(conn.conn)
 
 	// Read the version byte
 	version := []byte{0}
@@ -147,28 +181,30 @@ func (s *Server) ServeConn(conn net.Conn) error {
 	}
 
 	// Authenticate the connection
-	authContext, err := s.authenticate(conn, bufConn)
+	authContext, err := s.authenticate(conn.conn, bufConn)
 	if err != nil {
 		return fmt.Errorf("failed to authenticate: %v", err)
 	}
-
-	request, err := NewRequest(bufConn)
+	reqId := uuid.New()
+	l := *conn.Lg
+	l.AddField(map[string]string{"reqId": reqId.String()})
+	request, err := NewRequest(reqId, &l, bufConn)
 	if err != nil {
 		if errors.Is(err, unrecognizedAddrType) {
-			if err := sendReply(conn, addrTypeNotSupported, nil); err != nil {
+			if err := sendReply(conn.conn, addrTypeNotSupported, nil); err != nil {
 				return fmt.Errorf("failed to send reply: %v", err)
 			}
 		}
 		return fmt.Errorf("failed to read destination address: %v", err)
 	}
 	request.AuthContext = authContext
-	if client, ok := conn.RemoteAddr().(*net.TCPAddr); ok {
+	if client, ok := conn.conn.RemoteAddr().(*net.TCPAddr); ok {
 		request.RemoteAddr = &AddrSpec{IP: client.IP, Port: client.Port}
 	}
-	s.config.Logger.Lg.Debug().Msgf("%s -> %s", request.RemoteAddr, request.DestAddr)
+	conn.Lg.Lg.Debug().Msgf("%s -> %s", request.RemoteAddr, request.DestAddr)
 
 	// Process the client request
-	if err := s.handleRequest(request, conn); err != nil {
+	if err := s.handleRequest(request, conn.conn); err != nil {
 		return fmt.Errorf("failed to handle request: %v", err)
 	}
 

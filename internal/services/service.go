@@ -44,9 +44,8 @@ func NewService(ctx context.Context, lg *logger.Logger, listen string, auth conf
 	}
 	conf := &socks5.Config{
 		AuthMethods: []socks5.Authenticator{authMethod},
-		Logger:      lg,
 	}
-	srv, err := socks5.New(ctx, conf)
+	srv, err := socks5.New(ctx, lg, conf)
 	if err != nil {
 		return &Service{}, fmt.Errorf("failed to create socks5 server: %v", err)
 	}

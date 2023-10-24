@@ -5,11 +5,11 @@ go 1.19
 require (
 	github.com/carlmjohnson/versioninfo v0.22.5
 	github.com/go-ldap/ldap v3.0.3+incompatible
+	github.com/google/uuid v1.3.0
 	github.com/jellydator/ttlcache/v3 v3.1.0
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/rs/zerolog v1.30.0
 	github.com/stretchr/testify v1.8.4
-	golang.org/x/crypto v0.13.0
 	golang.org/x/net v0.15.0
 )
 
