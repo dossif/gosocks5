@@ -7,13 +7,14 @@ import (
 	"github.com/dossif/gosocks5/pkg/logger"
 	"github.com/google/uuid"
 	"golang.org/x/net/context"
-	"io"
 	"net"
+	"runtime"
 	"time"
 )
 
 const (
 	socks5Version = uint8(5)
+	connDeadline  = time.Second * 10
 )
 
 var ConnCount int
@@ -114,8 +115,16 @@ func (s *Server) ListenAndServe(network, addr string) error {
 	}
 	go func() {
 		for {
-			s.Lg.Lg.Trace().Msgf("connection count: %v", ConnCount)
-			time.Sleep(time.Second * 3)
+			var m runtime.MemStats
+			runtime.ReadMemStats(&m)
+			s.Lg.Lg.Trace().
+				Int("conn", ConnCount).
+				Int("gorutines", runtime.NumGoroutine()).
+				Uint64("memTotalAllocMiB", m.TotalAlloc/1024/1024).
+				Uint64("memSysMiB", m.Sys/1024/1024).
+				Uint32("memNumGc", m.NumGC).
+				Msgf("statistics")
+			time.Sleep(time.Second * 5)
 		}
 	}()
 	return s.ServeListener(ll)
@@ -165,25 +174,12 @@ func (s *Server) ServeConnection(conn Connection) error {
 			conn.Lg.Lg.Warn().Msgf("failed to close connection %v", err)
 		} else {
 			ConnCount = ConnCount - 1
-			conn.Lg.Lg.Trace().Msgf("closed connection")
+			conn.Lg.Lg.Trace().Msgf("close connection")
 		}
 	}()
 	bufConn := bufio.NewReader(conn.conn)
 
-	go func() {
-		for {
-			_ = conn.conn.SetReadDeadline(time.Now().Add(time.Second * 2))
-			_, err := conn.conn.Read([]byte{})
-			if err == io.EOF {
-				fmt.Println("EOF EOF EOF")
-				_ = conn.conn.Close()
-				break
-			} else {
-				_ = conn.conn.SetReadDeadline(time.Time{})
-			}
-			time.Sleep(time.Second * 2)
-		}
-	}()
+	_ = conn.conn.SetReadDeadline(time.Now().Add(connDeadline))
 
 	// Read the version byte
 	version := []byte{0}

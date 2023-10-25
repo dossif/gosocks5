@@ -193,7 +193,7 @@ func (s *Server) handleConnect(ctx context.Context, conn conn, req *Request) err
 		if err != nil {
 			req.Lg.Lg.Warn().Msgf("failed to close target %v: %v", req.realDestAddr.Address(), err)
 		} else {
-			req.Lg.Lg.Trace().Msgf("closed target %v", req.realDestAddr.Address())
+			req.Lg.Lg.Trace().Msgf("close target %v", req.realDestAddr.Address())
 		}
 	}()
 
@@ -368,7 +368,7 @@ func proxy(lg *logger.Logger, dst io.Writer, src io.Reader, errCh chan error) {
 		if err != nil {
 			lg.Lg.Warn().Msgf("failed to close proxy: %v", err)
 		} else {
-			lg.Lg.Trace().Msgf("closed proxy")
+			lg.Lg.Trace().Msgf("close proxy")
 		}
 	}
 	errCh <- err
