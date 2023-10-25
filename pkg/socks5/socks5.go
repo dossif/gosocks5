@@ -193,13 +193,13 @@ func (s *Server) ServeConnection(conn Connection) error {
 	}
 
 	// Authenticate the connection
-	authContext, err := s.authenticate(conn.conn, bufConn)
+	authContext, user, err := s.authenticate(conn.conn, bufConn)
 	if err != nil {
 		return fmt.Errorf("failed to authenticate: %v", err)
 	}
 	reqId := uuid.New()
 	l := *conn.Lg
-	l.AddField(map[string]string{"reqId": reqId.String()})
+	l.AddField(map[string]string{"reqId": reqId.String(), "user": user})
 	request, err := NewRequest(reqId, &l, bufConn)
 	if err != nil {
 		if errors.Is(err, unrecognizedAddrType) {
@@ -213,7 +213,7 @@ func (s *Server) ServeConnection(conn Connection) error {
 	if client, ok := conn.conn.RemoteAddr().(*net.TCPAddr); ok {
 		request.RemoteAddr = &AddrSpec{IP: client.IP, Port: client.Port}
 	}
-	conn.Lg.Lg.Debug().Msgf("%s -> %s", request.RemoteAddr, request.DestAddr)
+	l.Lg.Debug().Msgf("%s -> %s", request.RemoteAddr, request.DestAddr)
 
 	// Process the client request
 	if err := s.handleRequest(request, conn.conn); err != nil {
